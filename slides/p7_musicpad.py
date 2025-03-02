@@ -2,7 +2,7 @@ from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.containers import Grid
 from textual.widgets import Button, Static
-from musicpy import *
+from musicpy import C, drum, play
 
 
 class Slide(Screen):

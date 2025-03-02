@@ -1,0 +1,2 @@
+present:
+	python app.py
