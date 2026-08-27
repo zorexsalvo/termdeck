@@ -1,0 +1,7 @@
+__pycache__/
+*.egg-info/
+build/
+dist/
+slides/
+temp.mid
+.venv/

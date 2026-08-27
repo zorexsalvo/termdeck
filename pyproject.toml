@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "termdeck"
+dynamic = ["version"]
+description = "Terminal presentations, written in Markdown or Python"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+keywords = ["presentation", "slides", "terminal", "textual", "markdown"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics :: Presentation",
+]
+dependencies = [
+    "textual>=0.84",
+]
+
+[project.optional-dependencies]
+music = ["musicpy", "pygame", "mido-fix"]
+dev = ["build", "twine"]
+
+[project.scripts]
+termdeck = "termdeck.deck:main"
+
+[tool.setuptools]
+packages = ["termdeck"]
+
+[tool.setuptools.dynamic]
+version = { attr = "termdeck.__version__" }
+
+[tool.setuptools.package-data]
+termdeck = ["styles/*.tcss", "sample/*"]
