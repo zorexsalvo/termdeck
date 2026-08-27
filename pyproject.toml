@@ -8,6 +8,8 @@ dynamic = ["version"]
 description = "Terminal presentations, written in Markdown or Python"
 readme = "README.md"
 license = { text = "MIT" }
+authors = [{ name = "Zorex Salvo", email = "zorexsalvo@gmail.com" }]
+urls = { Homepage = "https://github.com/zorexsalvo/presentazi" }
 requires-python = ">=3.8"
 keywords = ["presentation", "slides", "terminal", "textual", "markdown"]
 classifiers = [

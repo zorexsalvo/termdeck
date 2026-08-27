@@ -34,6 +34,10 @@ class TermDeck(App):
 
         self.push_screen(names[self.slide_number])
 
+    def on_mount(self) -> None:
+        if self.names:
+            self.push_screen(self.names[0])
+
     def compose(self):
         yield Header()
         yield Footer()
