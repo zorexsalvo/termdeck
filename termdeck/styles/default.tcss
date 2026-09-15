@@ -1,9 +1,21 @@
 #markdown-slide Markdown {
     margin: 0 20;
+    text-align: left;
 }
 
 #markdown-slide ImageWidget {
-    width: 100%;
+    width: 60;
     height: auto;
-    content-align: center middle;
+    max-height: 20;
+}
+
+ImageFullscreen {
+    layout: vertical;
+    overflow: hidden;
+    align: center middle;
+}
+
+ImageFullscreen ImageWidget {
+    width: auto;
+    height: auto;
 }

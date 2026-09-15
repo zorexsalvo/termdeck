@@ -16,6 +16,8 @@ Optional extras:
 pip install "termdeck[music]"   # interactive music-pad slides
 ```
 
+Requires Python 3.10 or newer.
+
 ## Usage
 
 ```bash
@@ -24,7 +26,14 @@ termdeck ./my-deck      # play your own deck
 python -m termdeck      # same thing
 ```
 
-Navigate with **← / →** arrow keys; quit with **Ctrl+C**.
+Navigate with **← / →** arrow keys.
+
+While viewing a slide that contains an image:
+
+- **f** — toggle fullscreen image view
+- **o** — open the image in your system default image viewer
+- **Esc** — exit fullscreen
+- **Ctrl+C** — quit
 
 ## Writing a deck
 
@@ -43,7 +52,36 @@ A deck is a folder of slide files. Files are sorted by name.
 
 Image paragraphs (`![alt](path)`) are rendered as images. Relative paths are resolved from the slide file's directory.
 
+Images are rendered using the best available terminal graphics method: Kitty graphics protocol, Sixel, iTerm2 inline images, or a colored half-block fallback. This means images stay crisp even when you zoom the terminal font to make text readable.
+
 Supported formats: `png`, `jpg`, `jpeg`, `gif`, `webp`, `bmp`.
+
+Images are horizontally centered. By default `![alt](path)` images render at a fixed width of 60 cells. To control an individual image's size, use a standard HTML `<img>` tag:
+
+```markdown
+<img src="diagram.png" width="80%">
+<img src="diagram.png" width="60" height="auto">
+```
+
+To change the default size or alignment for all images in a deck, add a `deck.tcss` file in your deck folder:
+
+```css
+/* Default: 60 cells wide, centered */
+#markdown-slide ImageWidget {
+    width: 60;
+    height: auto;
+    margin: 0 10;
+}
+```
+
+If image auto-detection misbehaves in your terminal, force a specific renderer:
+
+```bash
+TERMDECK_IMAGE_PROTOCOL=kitty termdeck ./my-deck     # Kitty TGP
+TERMDECK_IMAGE_PROTOCOL=sixel termdeck ./my-deck     # Sixel
+TERMDECK_IMAGE_PROTOCOL=halfcell termdeck ./my-deck  # colored half blocks
+TERMDECK_IMAGE_PROTOCOL=unicode termdeck ./my-deck   # unicode characters
+```
 
 ### Python slides
 
@@ -59,9 +97,9 @@ class Slide(Screen):
         yield Button("Hello")
 ```
 
-The screen's widgets are styled by `styles/default.tcss`, which you can override in
-your deck if you want. All Textual functionality is available for rich,
-interactive slides.
+The screen's widgets are styled by `styles/default.tcss`. You can add a `deck.tcss`
+file in your deck folder to override styles. All Textual functionality is available
+for rich, interactive slides.
 
 ## Development
 
@@ -74,3 +112,5 @@ python -m build
 ## License
 
 MIT
+
+Terminal graphics rendering is provided by [textual-image](https://github.com/lnqs/textual-image) (LGPL-3.0-or-later).

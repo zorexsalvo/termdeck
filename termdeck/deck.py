@@ -1,15 +1,63 @@
 import importlib.util
+import os
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
+from typing import Type
 
 from markdown_it import MarkdownIt
-from PIL import Image as PILImage
-from rich_pixels import Pixels
-from textual.containers import VerticalScroll
+from textual.containers import Center, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Markdown, Static
+from textual.widgets import Markdown
+from textual_image.renderable import Image as AutoRenderable
+from textual_image.renderable._protocol import ImageRenderable
+from textual_image.renderable.halfcell import Image as HalfcellRenderable
+from textual_image.renderable.sixel import Image as SixelRenderable
+from textual_image.renderable.tgp import Image as TGPRenderable
+from textual_image.renderable.unicode import Image as UnicodeRenderable
+from textual_image.widget._base import Image as BaseImage
 
 SLIDE_EXTS = (".md", ".MD", ".py")
+
+
+def _parse_img_tag(html: str) -> dict[str, str] | None:
+    """Parse a standalone <img> tag and return its attributes, or None."""
+    stripped = html.strip()
+    if not stripped.lower().startswith("<img"):
+        return None
+
+    class Parser(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.attrs: dict[str, str] | None = None
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            if tag == "img" and self.attrs is None:
+                self.attrs = {k: (v or "") for k, v in attrs}
+
+    parser = Parser()
+    try:
+        parser.feed(stripped)
+    except Exception:
+        return None
+    return parser.attrs
+
+
+_IMAGE_RENDERERS: dict[str, Type[ImageRenderable]] = {
+    "kitty": TGPRenderable,
+    "tgp": TGPRenderable,
+    "sixel": SixelRenderable,
+    "halfcell": HalfcellRenderable,
+    "unicode": UnicodeRenderable,
+}
+
+
+def _get_image_renderable() -> Type[ImageRenderable]:
+    """Return the image renderable selected by TERMDECK_IMAGE_PROTOCOL, or auto."""
+    protocol = os.environ.get("TERMDECK_IMAGE_PROTOCOL", "auto").lower()
+    if protocol in _IMAGE_RENDERERS:
+        return _IMAGE_RENDERERS[protocol]
+    return AutoRenderable
 
 
 def load_slide(path: Path) -> type[Screen]:
@@ -48,20 +96,23 @@ def _markdown_slide(path: Path) -> type[Screen]:
                     if seg_type == "markdown":
                         yield Markdown(seg_data)
                     elif seg_type == "image":
-                        yield ImageWidget(seg_data)
+                        img_path, width, height = seg_data
+                        with Center():
+                            yield ImageWidget(img_path, width=width, height=height)
 
     return Slide
 
 
-def _split_markdown(content: str, base_dir: Path) -> list[tuple[str, Path | str]]:
+def _split_markdown(content: str, base_dir: Path) -> list[tuple[str, Path | str | tuple[Path, str | None, str | None]]]:
     """Split markdown into text chunks and image blocks.
 
     Paragraphs that contain only a single image token become ("image", path).
+    Standalone HTML <img> tags become ("image", (path, width, height)).
     Everything else becomes ("markdown", text_chunk).
     """
     tokens = MarkdownIt().parse(content)
     lines = content.splitlines()
-    images: list[tuple[int, int, Path]] = []
+    images: list[tuple[int, int, Path, str | None, str | None]] = []
 
     i = 0
     while i < len(tokens):
@@ -78,16 +129,24 @@ def _split_markdown(content: str, base_dir: Path) -> list[tuple[str, Path | str]
                     src = children[0].attrs.get("src", "")
                     img_path = _resolve_image_path(src, base_dir)
                     start, end = token.map
-                    images.append((start, end, img_path))
+                    images.append((start, end, img_path, None, None))
+        elif token.type == "html_block" and token.map is not None:
+            attrs = _parse_img_tag(token.content)
+            if attrs:
+                src = attrs.get("src", "")
+                if src:
+                    img_path = _resolve_image_path(src, base_dir)
+                    start, end = token.map
+                    images.append((start, end, img_path, attrs.get("width"), attrs.get("height")))
         i += 1
 
-    segments: list[tuple[str, Path | str]] = []
+    segments: list[tuple[str, Path | str | tuple[Path, str | None, str | None]]] = []
     last_end = 0
-    for start, end, img_path in images:
+    for start, end, img_path, width, height in images:
         before = "\n".join(lines[last_end:start])
         if before.strip():
             segments.append(("markdown", before))
-        segments.append(("image", img_path))
+        segments.append(("image", (img_path, width, height)))
         last_end = end
 
     after = "\n".join(lines[last_end:])
@@ -112,48 +171,27 @@ def _python_slide(path: Path) -> type[Screen]:
     return module.Slide
 
 
-class ImageWidget(Static):
-    """A widget that renders an image file as a Rich Pixels renderable, fitted to the viewport."""
+class ImageWidget(BaseImage, Renderable=_get_image_renderable()):
+    """A widget that renders an image file using the best available terminal graphics method."""
+
+    def __init__(self, path: Path, width: str | None = None, height: str | None = None, **kwargs):
+        super().__init__(path, **kwargs)
+        self.path = Path(path)
+        if width:
+            self.styles.width = width
+        if height:
+            self.styles.height = height
+
+
+class ImageFullscreen(Screen):
+    """A full-screen view of a single image."""
 
     def __init__(self, path: Path, **kwargs):
-        super().__init__("", **kwargs)
+        super().__init__(**kwargs)
         self.path = Path(path)
-        self._pil_image = PILImage.open(self.path)
-        if self._pil_image.mode not in ("RGB", "RGBA"):
-            self._pil_image = self._pil_image.convert("RGB")
 
-    def _fit(self, width: int, height: int) -> tuple[int, int]:
-        """Return (pixel_width, pixel_height) that fits inside width x (height*2)."""
-        img_w, img_h = self._pil_image.size
-        max_h = max(2, height * 2)
-        scale = min(width / img_w, max_h / img_h, 1.0)
-        pixel_w = max(2, int(img_w * scale))
-        pixel_h = max(2, int(img_h * scale))
-        if pixel_h % 2 != 0:
-            pixel_h += 1
-        return pixel_w, pixel_h
-
-    def get_content_height(self, container, viewport, width: int) -> int:
-        if width < 1 or viewport.height < 1:
-            return 0
-        # Subtract 6 from the viewport to leave room for the header, footer,
-        # and any text above the image; this is approximate but keeps images
-        # on screen without requiring the user to scroll.
-        budget = max(2, viewport.height - 6)
-        _, pixel_h = self._fit(width, budget)
-        return pixel_h // 2
-
-    def render(self):
-        width = self.content_size.width
-        height = self.content_size.height
-        if width < 1 or height < 1:
-            return ""
-
-        pixel_w, pixel_h = self._fit(width, height)
-        resized = self._pil_image.resize(
-            (pixel_w, pixel_h), PILImage.Resampling.LANCZOS
-        )
-        return Pixels.from_image(resized)
+    def compose(self):
+        yield ImageWidget(self.path, id="fullscreen-image")
 
 
 def main() -> None:
