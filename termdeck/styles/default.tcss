@@ -4,9 +4,8 @@
 }
 
 #markdown-slide ImageWidget {
-    width: 60;
+    width: auto;
     height: auto;
-    max-height: 20;
 }
 
 ImageFullscreen {

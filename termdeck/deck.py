@@ -214,13 +214,50 @@ def _python_slide(path: Path) -> type[Screen]:
 class ImageWidget(BaseImage, Renderable=_get_image_renderable()):
     """A widget that renders an image file using the best available terminal graphics method."""
 
-    def __init__(self, path: Path, width: str | None = None, height: str | None = None, **kwargs):
+    DEFAULT_MAX_HEIGHT = 20
+    DEFAULT_MAX_WIDTH = 60
+
+    def __init__(self, path: Path, width: str | None = None, height: str | None = None, cap_size: bool = True, **kwargs):
         super().__init__(path, **kwargs)
         self.path = Path(path)
+        self._cap_size = cap_size
         if width:
             self.styles.width = width
         if height:
             self.styles.height = height
+
+    def _compute_cell_size(self) -> tuple[int, int]:
+        """Return (width, height) preserving aspect ratio, capping at defaults."""
+        if self._image_width == 0 or self._image_height == 0:
+            return 0, 0
+
+        from textual_image._terminal import get_cell_size
+
+        cell = get_cell_size()
+        natural_w = self._image_width / cell.width
+        natural_h = self._image_height / cell.height
+
+        # Respect explicit width (e.g. from <img width="50">)
+        styled_w = self.styles.width
+        if styled_w is not None and not styled_w.is_auto:
+            width = self.content_size.width
+            ratio = self._image_width / self._image_height
+            computed_h = round(width * cell.width / ratio / cell.height)
+            if computed_h > self.DEFAULT_MAX_HEIGHT:
+                scaled_pixel_h = self.DEFAULT_MAX_HEIGHT * cell.height
+                scaled_pixel_w = scaled_pixel_h * ratio
+                width = max(1, round(scaled_pixel_w / cell.width))
+                computed_h = self.DEFAULT_MAX_HEIGHT
+            return width, max(1, computed_h)
+
+        # No explicit width: fit within defaults while preserving aspect ratio
+        scale = min(self.DEFAULT_MAX_WIDTH / natural_w, self.DEFAULT_MAX_HEIGHT / natural_h, 1.0)
+        return max(1, round(natural_w * scale)), max(1, round(natural_h * scale))
+
+    def _get_styled_size(self):
+        if not self._cap_size:
+            return super()._get_styled_size()
+        return self._compute_cell_size()
 
 
 class ImageFullscreen(Screen):
@@ -231,7 +268,7 @@ class ImageFullscreen(Screen):
         self.path = Path(path)
 
     def compose(self):
-        yield ImageWidget(self.path, id="fullscreen-image")
+        yield ImageWidget(self.path, id="fullscreen-image", cap_size=False)
 
 
 def main() -> None:

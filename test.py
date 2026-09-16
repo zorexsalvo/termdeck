@@ -66,8 +66,10 @@ def test_markdown_inline_image(tmp_dir):
         async with app.run_test(size=(80, 24)) as pilot:
             await pilot.pause()
             image_widget = app.screen.query_one("ImageWidget")
-            assert image_widget.region.x == 10
-            assert image_widget.region.width == 60
+            # 20x10 pixel image → 2x1 cells, centered in 80-col terminal
+            assert image_widget.region.width == 2
+            assert image_widget.region.height == 1
+            assert image_widget.region.x == 39
             renderable = image_widget.render()
             assert renderable is not None
 
@@ -331,6 +333,33 @@ def test_notes_app_navigates_and_writes_state(tmp_dir):
     asyncio.run(_run())
 
 
+def test_tall_image_shrinks(tmp_dir):
+    from PIL import Image as PILImage
+
+    from termdeck.app import TermDeck
+
+    # Create a very tall image (20x400 pixels)
+    img_path = tmp_dir / "tall.png"
+    PILImage.new("RGB", (20, 400), color="blue").save(img_path)
+
+    md = tmp_dir / "slide.md"
+    md.write_text("# Title\n\n![tall](tall.png)\n")
+
+    async def _run():
+        app = TermDeck(tmp_dir)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            image_widget = app.screen.query_one("ImageWidget")
+            # Height should be capped at DEFAULT_MAX_HEIGHT (20)
+            assert image_widget.region.height <= 20
+            # Width should be shrunk proportionally (much less than 60)
+            assert image_widget.region.width < 10
+
+    import asyncio
+
+    asyncio.run(_run())
+
+
 def main():
     test_load_slide_markdown()
     test_load_deck_sorted()
@@ -363,6 +392,10 @@ def main():
     with TemporaryDirectory() as tmp:
         path = Path(tmp)
         test_notes_app_navigates_and_writes_state(path)
+
+    with TemporaryDirectory() as tmp:
+        path = Path(tmp)
+        test_tall_image_shrinks(path)
 
     print("All tests passed.")
 
