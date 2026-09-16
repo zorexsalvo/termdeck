@@ -24,7 +24,7 @@ from textual_image.widget._base import Image as BaseImage
 
 SLIDE_EXTS = (".md", ".MD", ".py")
 
-_NOTE_PATTERN = re.compile(r"^\s*<!--\s*note(?:s)?\s*:\s*(.*?)\s*-->\s*$", re.IGNORECASE | re.MULTILINE)
+_NOTE_PATTERN = re.compile(r"^\s*<!--\s*note\s*:\s*(.*?)\s*-->\s*$", re.IGNORECASE | re.DOTALL | re.MULTILINE)
 
 
 def _parse_img_tag(html: str) -> dict[str, str] | None:

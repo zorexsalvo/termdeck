@@ -176,9 +176,13 @@ def test_html_img_tag_with_size(tmp_dir):
 def test_extract_notes():
     from termdeck.deck import _extract_notes
 
-    content = "# Title\n\n<!-- note: first note -->\n\nSome text.\n\n<!-- notes: second note -->\n"
+    content = "# Title\n\n<!-- note: first note -->\n\nSome text.\n\n<!-- note: second note -->\n"
     notes = _extract_notes(content)
     assert notes == "first note\n\nsecond note"
+
+    multiline = "# Title\n\n<!-- note:\n- Mention the 3x speedup\n- Ask if anyone has questions\n-->\n"
+    notes = _extract_notes(multiline)
+    assert notes == "- Mention the 3x speedup\n- Ask if anyone has questions"
 
     assert _extract_notes("# Title\n\nNo notes here.") == ""
     assert _extract_notes("<!-- NOTE:   spaced out   -->") == "spaced out"
