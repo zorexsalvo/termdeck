@@ -19,3 +19,21 @@ ImageFullscreen ImageWidget {
     width: auto;
     height: auto;
 }
+
+#notes-container {
+    padding: 1 2;
+}
+
+#info-bar {
+    height: auto;
+    text-align: center;
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+#next-slide-bar {
+    height: auto;
+    text-align: center;
+    color: $text-muted;
+    margin-top: 1;
+}

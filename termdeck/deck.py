@@ -1,6 +1,11 @@
+import hashlib
 import importlib.util
+import json
 import os
+import re
 import sys
+import tempfile
+import time
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Type
@@ -18,6 +23,8 @@ from textual_image.renderable.unicode import Image as UnicodeRenderable
 from textual_image.widget._base import Image as BaseImage
 
 SLIDE_EXTS = (".md", ".MD", ".py")
+
+_NOTE_PATTERN = re.compile(r"^\s*<!--\s*note(?:s)?\s*:\s*(.*?)\s*-->\s*$", re.IGNORECASE | re.MULTILINE)
 
 
 def _parse_img_tag(html: str) -> dict[str, str] | None:
@@ -60,6 +67,33 @@ def _get_image_renderable() -> Type[ImageRenderable]:
     return AutoRenderable
 
 
+def _extract_notes(content: str) -> str:
+    """Extract presenter notes from block-level HTML comments."""
+    notes = [m.group(1).strip() for m in _NOTE_PATTERN.finditer(content)]
+    return "\n\n".join(notes)
+
+
+def _get_state_path(deck_dir: Path) -> Path:
+    """Return the path to the shared state file for a deck directory."""
+    h = hashlib.sha256(str(Path(deck_dir).resolve()).encode()).hexdigest()[:16]
+    return Path(tempfile.gettempdir()) / f"termdeck-{h}.json"
+
+
+def _write_state(path: Path, slide: int, name: str, total_start: float, slide_start: float) -> None:
+    """Atomically write the current presentation state to a JSON file."""
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(
+        json.dumps({
+            "slide": slide,
+            "name": name,
+            "total_start_time": total_start,
+            "slide_start_time": slide_start,
+        }),
+        encoding="utf-8",
+    )
+    tmp.replace(path)
+
+
 def load_slide(path: Path) -> type[Screen]:
     """Load a single slide file (markdown or python Textual screen) as a Screen."""
     path = Path(path)
@@ -70,15 +104,21 @@ def load_slide(path: Path) -> type[Screen]:
     raise ValueError(f"Unsupported slide type: {path.suffix}")
 
 
-def load_deck(directory: Path) -> list[tuple[str, type[Screen]]]:
-    """Load all slides in a directory, sorted by filename."""
+def load_deck(directory: Path) -> list[tuple[str, type[Screen], str]]:
+    """Load all slides in a directory, sorted by filename.
+
+    Returns a list of (filename, Screen class, notes) tuples.
+    """
     slides = []
     for path in sorted(Path(directory).iterdir()):
         if path.name == "__init__.py":
             continue
         if path.suffix not in SLIDE_EXTS:
             continue
-        slides.append((path.name, load_slide(path)))
+        notes = ""
+        if path.suffix in (".md", ".MD"):
+            notes = _extract_notes(path.read_text())
+        slides.append((path.name, load_slide(path), notes))
     return slides
 
 
@@ -195,10 +235,17 @@ class ImageFullscreen(Screen):
 
 
 def main() -> None:
-    if len(sys.argv) > 1:
-        deck_dir = Path(sys.argv[1])
-    else:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Terminal presentations")
+    parser.add_argument("deck_dir", nargs="?", default=None, help="Directory of slides")
+    parser.add_argument("--notes", action="store_true", help="Open presenter notes companion")
+    args = parser.parse_args()
+
+    if args.deck_dir is None:
         deck_dir = Path(__file__).parent / "sample"
+    else:
+        deck_dir = Path(args.deck_dir)
 
     if not deck_dir.is_dir():
         sys.exit(f"error: not a directory: {deck_dir}")
@@ -207,9 +254,12 @@ def main() -> None:
     if not slides:
         sys.exit(f"error: no slides (.md/.py) found in {deck_dir}")
 
-    from termdeck.app import TermDeck
-
-    TermDeck(deck_dir).run()
+    if args.notes:
+        from termdeck.notes_app import TermDeckNotes
+        TermDeckNotes(deck_dir, slides=slides).run()
+    else:
+        from termdeck.app import TermDeck
+        TermDeck(deck_dir, slides=slides).run()
 
 
 if __name__ == "__main__":

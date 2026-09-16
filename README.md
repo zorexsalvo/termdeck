@@ -35,6 +35,27 @@ While viewing a slide that contains an image:
 - **Esc** — exit fullscreen
 - **Ctrl+C** — quit
 
+### Presenter notes
+
+Add notes to any Markdown slide with block-level HTML comments:
+
+```markdown
+# My title
+
+- a bullet
+- another bullet
+
+<!-- note: Remember to mention the 3x speedup -->
+```
+
+Open a notes companion in a second terminal:
+
+```bash
+termdeck --notes ./my-deck
+```
+
+The notes window shows the current slide’s notes, a running timer, and the next slide filename. It syncs automatically as you navigate the main deck.
+
 ## Writing a deck
 
 A deck is a folder of slide files. Files are sorted by name.

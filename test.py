@@ -2,6 +2,7 @@ from pathlib import Path
 from unittest import mock
 
 from PIL import Image as PILImage
+from textual.widgets import Markdown
 
 from termdeck.deck import ImageFullscreen, load_deck, load_slide
 
@@ -22,7 +23,7 @@ def test_load_slide_python(tmp_dir):
 
 def test_load_deck_sorted():
     slides = load_deck(SAMPLE)
-    names = [name for name, _ in slides]
+    names = [name for name, _, _ in slides]
     assert names == sorted(names)
     assert len(slides) == 2
     assert all(name.endswith((".md", ".MD", ".py")) for name in names)
@@ -172,6 +173,160 @@ def test_html_img_tag_with_size(tmp_dir):
     asyncio.run(_run())
 
 
+def test_extract_notes():
+    from termdeck.deck import _extract_notes
+
+    content = "# Title\n\n<!-- note: first note -->\n\nSome text.\n\n<!-- notes: second note -->\n"
+    notes = _extract_notes(content)
+    assert notes == "first note\n\nsecond note"
+
+    assert _extract_notes("# Title\n\nNo notes here.") == ""
+    assert _extract_notes("<!-- NOTE:   spaced out   -->") == "spaced out"
+
+
+def test_state_file_written(tmp_dir):
+    from textual.events import Key
+
+    from termdeck.app import TermDeck
+    from termdeck.deck import _get_state_path
+
+    img_path = tmp_dir / "diagram.png"
+    PILImage.new("RGB", (20, 10), color="blue").save(img_path)
+
+    md = tmp_dir / "slide.md"
+    md.write_text("# Title\n\n<!-- note: remember to smile -->\n")
+
+    state_path = _get_state_path(tmp_dir)
+    if state_path.exists():
+        state_path.unlink()
+
+    async def _run():
+        app = TermDeck(tmp_dir)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            assert state_path.exists()
+            import json
+
+            data = json.loads(state_path.read_text())
+            assert data["slide"] == 0
+            assert data["name"] == "slide.md"
+
+            app.on_key(Key("right", "right"))
+            await pilot.pause()
+            data = json.loads(state_path.read_text())
+            assert data["slide"] == 0  # only one slide, can't advance
+
+    import asyncio
+
+    asyncio.run(_run())
+
+
+def test_notes_app_display(tmp_dir):
+    import json
+
+    from termdeck.deck import _get_state_path
+    from termdeck.notes_app import TermDeckNotes
+
+    md = tmp_dir / "slide.md"
+    md.write_text("# Title\n\n<!-- note: hello notes -->\n")
+
+    state_path = _get_state_path(tmp_dir)
+    state_path.write_text(
+        json.dumps({
+            "slide": 0,
+            "name": "slide.md",
+            "total_start_time": 0.0,
+            "slide_start_time": 0.0,
+        }),
+        encoding="utf-8",
+    )
+
+    async def _run():
+        app = TermDeckNotes(tmp_dir)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            assert app.slide_index == 0
+            assert app.query_one("#notes-content") is not None
+
+    import asyncio
+
+    asyncio.run(_run())
+
+
+def test_main_deck_polls_state(tmp_dir):
+    import json
+    import time
+
+    from termdeck.app import TermDeck
+    from termdeck.deck import _get_state_path, _write_state
+
+    md1 = tmp_dir / "01_slide.md"
+    md1.write_text("# Slide 1\n")
+    md2 = tmp_dir / "02_slide.md"
+    md2.write_text("# Slide 2\n")
+
+    state_path = _get_state_path(tmp_dir)
+    if state_path.exists():
+        state_path.unlink()
+
+    async def _run():
+        app = TermDeck(tmp_dir)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            assert app.slide_number == 0
+
+            _write_state(state_path, 1, "02_slide.md", time.time(), time.time())
+            import asyncio
+            await asyncio.sleep(0.3)
+            assert app.slide_number == 1
+
+    import asyncio
+
+    asyncio.run(_run())
+
+
+def test_notes_app_navigates_and_writes_state(tmp_dir):
+    import json
+
+    from textual.events import Key
+
+    from termdeck.deck import _get_state_path
+    from termdeck.notes_app import TermDeckNotes
+
+    md1 = tmp_dir / "01_slide.md"
+    md1.write_text("# Slide 1\n\n<!-- note: first -->\n")
+    md2 = tmp_dir / "02_slide.md"
+    md2.write_text("# Slide 2\n\n<!-- note: second -->\n")
+
+    state_path = _get_state_path(tmp_dir)
+    state_path.write_text(
+        json.dumps({
+            "slide": 0,
+            "name": "01_slide.md",
+            "total_start_time": 0.0,
+            "slide_start_time": 0.0,
+        }),
+        encoding="utf-8",
+    )
+
+    async def _run():
+        app = TermDeckNotes(tmp_dir)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            assert app.slide_index == 0
+
+            app.on_key(Key("right", "right"))
+            await pilot.pause()
+            assert app.slide_index == 1
+            data = json.loads(state_path.read_text())
+            assert data["slide"] == 1
+            assert data["name"] == "02_slide.md"
+
+    import asyncio
+
+    asyncio.run(_run())
+
+
 def main():
     test_load_slide_markdown()
     test_load_deck_sorted()
@@ -187,6 +342,23 @@ def main():
         test_fullscreen_image(path)
         test_open_image_externally(path)
         test_html_img_tag_with_size(path)
+        test_extract_notes()
+
+    with TemporaryDirectory() as tmp:
+        path = Path(tmp)
+        test_state_file_written(path)
+
+    with TemporaryDirectory() as tmp:
+        path = Path(tmp)
+        test_notes_app_display(path)
+
+    with TemporaryDirectory() as tmp:
+        path = Path(tmp)
+        test_main_deck_polls_state(path)
+
+    with TemporaryDirectory() as tmp:
+        path = Path(tmp)
+        test_notes_app_navigates_and_writes_state(path)
 
     print("All tests passed.")
 
