@@ -360,6 +360,46 @@ def test_tall_image_shrinks(tmp_dir):
     asyncio.run(_run())
 
 
+def test_notes_app_reset(tmp_dir):
+    import json
+
+    from termdeck.deck import _get_state_path
+    from termdeck.notes_app import TermDeckNotes
+
+    md1 = tmp_dir / "01_slide.md"
+    md1.write_text("# Slide 1\n\n<!-- note: first -->\n")
+    md2 = tmp_dir / "02_slide.md"
+    md2.write_text("# Slide 2\n\n<!-- note: second -->\n")
+
+    state_path = _get_state_path(tmp_dir)
+    state_path.write_text(
+        json.dumps({
+            "slide": 1,
+            "name": "02_slide.md",
+            "total_start_time": 0.0,
+            "slide_start_time": 0.0,
+        }),
+        encoding="utf-8",
+    )
+
+    async def _run():
+        app = TermDeckNotes(tmp_dir)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            assert app.slide_index == 1
+
+            app.action_reset()
+            await pilot.pause()
+            assert app.slide_index == 0
+            data = json.loads(state_path.read_text())
+            assert data["slide"] == 0
+            assert data["name"] == "01_slide.md"
+
+    import asyncio
+
+    asyncio.run(_run())
+
+
 def main():
     test_load_slide_markdown()
     test_load_deck_sorted()
@@ -396,6 +436,10 @@ def main():
     with TemporaryDirectory() as tmp:
         path = Path(tmp)
         test_tall_image_shrinks(path)
+
+    with TemporaryDirectory() as tmp:
+        path = Path(tmp)
+        test_notes_app_reset(path)
 
     print("All tests passed.")
 

@@ -33,6 +33,7 @@ While viewing a slide that contains an image:
 - **f** — toggle fullscreen image view
 - **o** — open the image in your system default image viewer
 - **Esc** — exit fullscreen
+- **r** — reset timer and jump to first slide
 - **Ctrl+C** — quit
 
 ### Presenter notes

@@ -16,7 +16,10 @@ class TermDeckNotes(App):
 
     title = "TermDeck Notes"
     CSS_PATH = str(Path(__file__).parent / "styles" / "default.tcss")
-    BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
+    BINDINGS = [
+        ("d", "toggle_dark", "Toggle dark mode"),
+        ("r", "reset", "Reset timer"),
+    ]
 
     slide_index = reactive(0)
     total_start = reactive(0.0)
@@ -120,10 +123,27 @@ class TermDeckNotes(App):
         )
         self._update_display()
 
+    def action_reset(self) -> None:
+        """Reset timer and jump to first slide."""
+        now = time.time()
+        self.slide_index = 0
+        self.total_start = now
+        self.slide_start = now
+        _write_state(
+            self.state_path,
+            0,
+            self._slides[0][0],
+            self.total_start,
+            self.slide_start,
+        )
+        self._update_display()
+
     def on_key(self, event: events.Key) -> None:
         if event.key == "right":
             self._navigate(1)
         elif event.key == "left":
             self._navigate(-1)
+        elif event.key == "r":
+            self.action_reset()
         else:
             return

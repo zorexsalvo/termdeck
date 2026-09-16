@@ -25,7 +25,10 @@ class TermDeck(App):
 
     title = "TermDeck"
     CSS_PATH = str(Path(__file__).parent / "styles" / "default.tcss")
-    BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
+    BINDINGS = [
+        ("d", "toggle_dark", "Toggle dark mode"),
+        ("r", "reset", "Reset timer"),
+    ]
 
     def __init__(self, deck_dir: Path, slides=None, *args, **kwargs):
         default_css = Path(__file__).parent / "styles" / "default.tcss"
@@ -101,6 +104,13 @@ class TermDeck(App):
             self.pop_screen()
         else:
             return
+
+    def action_reset(self) -> None:
+        """Reset timer and jump to first slide."""
+        now = time.time()
+        self._total_start = now
+        self._slide_start = now
+        self._go_to_slide(0)
 
     def _poll_state(self) -> None:
         if not self.state_path.exists():
