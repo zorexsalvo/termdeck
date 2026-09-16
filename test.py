@@ -350,8 +350,8 @@ def test_tall_image_shrinks(tmp_dir):
         async with app.run_test(size=(80, 24)) as pilot:
             await pilot.pause()
             image_widget = app.screen.query_one("ImageWidget")
-            # Height should be capped at DEFAULT_MAX_HEIGHT (20)
-            assert image_widget.region.height <= 20
+            # Height should be capped at DEFAULT_MAX_HEIGHT (15)
+            assert image_widget.region.height <= 15
             # Width should be shrunk proportionally (much less than 60)
             assert image_widget.region.width < 10
 

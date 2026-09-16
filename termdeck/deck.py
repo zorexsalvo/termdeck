@@ -214,7 +214,7 @@ def _python_slide(path: Path) -> type[Screen]:
 class ImageWidget(BaseImage, Renderable=_get_image_renderable()):
     """A widget that renders an image file using the best available terminal graphics method."""
 
-    DEFAULT_MAX_HEIGHT = 20
+    DEFAULT_MAX_HEIGHT = 15
     DEFAULT_MAX_WIDTH = 60
 
     def __init__(self, path: Path, width: str | None = None, height: str | None = None, cap_size: bool = True, **kwargs):
